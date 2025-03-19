@@ -66,39 +66,104 @@ def reverse_thumbnail_search(thumbnail_url):
     
     return results
 # Function to extract metadata including engagement metrics
-def get_video_metadata(video_url):
+def extract_video_id(video_url_or_id):
+    """
+    Extracts the YouTube video ID from a URL or returns the ID directly if provided.
+
+    :param video_url_or_id: The YouTube video URL or ID.
+    :return: The extracted video ID or None if the input is invalid.
+    """
+    # Regex pattern to match YouTube video IDs in various URL formats
+    youtube_regex = (
+        r'(?:https?://)?'  # Optional scheme (http or https)
+        r'(?:www\.)?'      # Optional "www."
+        r'(?:youtube\.com|youtu\.be)'  # Domain name
+        r'(?:/watch\?v=|/embed/|/v/|/shorts/|/live/|/)([a-zA-Z0-9_-]{11})'  # Video ID
+    )
+    
+    # Match the regex pattern
+    match = re.search(youtube_regex, video_url_or_id)
+    if match:
+        return match.group(1)  # Return the captured video ID
+    else:
+        # If no match, assume the input is already a video ID
+        if len(video_url_or_id) == 11 and re.match(r'^[a-zA-Z0-9_-]+$', video_url_or_id):
+            return video_url_or_id
+        return None
+
+
+def get_youtube_metadata(video):
+    video_id = extract_video_id(video)
+    """
+    Fetches metadata for a YouTube video using the ytapi.apps.mattw.io API.
+
+    :param video_id: The ID of the YouTube video.
+    :return: A dictionary containing the simplified metadata of the video.
+    """
+    # API endpoint
+    api_url = "https://ytapi.apps.mattw.io/v3/videos"
+    
+    # Query parameters
+    params = {
+        "key": "foo1",  # Static key as per the request data
+        "quotaUser": "WHQssHmB6JixluhJzlJjmNzmgBFelxHiKPUofnrx",  # Example quotaUser value
+        "part": "snippet,statistics,contentDetails,status",  # Simplified parts for testing
+        "id": video_id,  # YouTube video ID
+    }
+    
     try:
-        # Fetch metadata using yt_dlp
-        ydl_opts = {
-            "quiet": True,
-            "no_warnings": True,
-            "logtostderr": False
+        # Send a GET request to the API with the query parameters
+        headers = {
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "Origin": "https://mattw.io",
+            "Referer": "https://mattw.io/",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0"
         }
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info_dict = ydl.extract_info(video_url, download=False)
-            title = info_dict.get("title", "Title not found")
-            description = info_dict.get("description", "Description not found")
-            thumbnail_url = info_dict.get("thumbnail", "Thumbnail not found")
-            views = info_dict.get("view_count", 0)
-            likes = info_dict.get("like_count", 0)
-            comments = info_dict.get("comment_count", 0)
-            upload_date = datetime.strptime(info_dict.get("upload_date", "19700101"), "%Y%m%d").date()
-            author = info_dict.get('channel', 'Unknown')
-
-        return {
-            'title': title,
-            'description': description,
-            'url': video_url,
-            'thumbnail_url': thumbnail_url,
-            'views': views,
-            'likes': likes,
-            'comments': comments,
-            'upload_date': upload_date,
-            'author': author  # Add author to metadata
-        }
-
-    except Exception as e:
-        print(f"Error fetching metadata: {e}")
+        
+        response = requests.get(api_url, params=params, headers=headers)
+        
+        # Raise an exception if the request was unsuccessful
+        response.raise_for_status()
+        
+        # Parse the JSON response
+        metadata = response.json()
+        
+        # Check if the response contains valid data
+        if metadata.get("items"):
+            video_data = metadata["items"][0]
+            snippet = video_data["snippet"]
+            statistics = video_data["statistics"]
+            
+            # Extract relevant fields
+            title = snippet.get("title", "N/A")
+            description = snippet.get("description", "N/A")
+            video_url = f"https://www.youtube.com/watch?v={video_id}"
+            thumbnail_url = snippet["thumbnails"].get("maxres", {}).get("url", "N/A")
+            views = statistics.get("viewCount", "N/A")
+            likes = statistics.get("likeCount", "N/A")
+            comments = statistics.get("commentCount", "N/A")
+            upload_date = snippet.get("publishedAt", "N/A").split("T")[0]  # Extract date only
+            author = snippet.get("channelTitle", "N/A")
+            
+            # Return simplified metadata dictionary
+            return {
+                'title': title,
+                'description': description,
+                'url': video_url,
+                'thumbnail_url': thumbnail_url,
+                'views': views,
+                'likes': likes,
+                'comments': comments,
+                'upload_date': upload_date,
+                'author': author
+            }
+        else:
+            print("No metadata found for the provided video ID.")
+            print(f"Response: {metadata}")
+            return None
+    
+    except requests.exceptions.RequestException as e:
+        print(f"An error occurred while fetching metadata: {e}")
         return None
     
 # Function to compute cosine similarity using Sentence-BERT
@@ -162,4 +227,5 @@ def api_compute_similarity():
     )
  
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 10000))  # Render provides PORT dynamically
+    app.run(host="0.0.0.0", port=port, debug=True)
