@@ -7,15 +7,12 @@ from   pytube import Search
 from   datetime import datetime
 from   dotenv import load_dotenv
 from   flask import Flask, request, jsonify
-from   sentence_transformers import SentenceTransformer, util
 
 # Load environment variables from .env file
 load_dotenv()
 # Get the API key
 API_KEY = os.getenv("API_KEY")
 app = Flask(__name__)
-
-model = SentenceTransformer('all-MiniLM-L6-v2')
 
 # Function to generate similar titles
 def generate_similar_titles(title):
@@ -100,12 +97,6 @@ def get_video_metadata(video_url):
     except Exception as e:
         print(f"Error fetching metadata: {e}")
         return None
-# Function to compute cosine similarity using Sentence-BERT
-def compute_similarity(text1, text2):
-    embedding1 = model.encode(text1, convert_to_tensor=True)
-    embedding2 = model.encode(text2, convert_to_tensor=True)
-    similarity_score = util.cos_sim(embedding1, embedding2).item()
-    return float(round(similarity_score*100, 2))
 
 @app.route('/get-top-search-results/', methods=['POST'])
 def api_get_top_search_results():
@@ -155,9 +146,12 @@ def api_compute_similarity():
     video2 = data['video2']
     text1 = f"{video1['title']} {video1['description']}"
     text2 = f"{video2['title']} {video2['description']}"
-    similarity_score = compute_similarity(text1, text2)
+    body = {'text_1': text1, 'text_2': text2}
+    api_url = 'https://api.api-ninjas.com/v1/textsimilarity'
+    response = requests.post(api_url, headers={'X-Api-Key': 'iA1uG7UEmJtOuvU1MrS9Kw==bLdVLc81sdAwwpRd'}, json=data)
+    similarity_score = response.json()['similarity']
     return jsonify(
-        {'similarity': similarity_score}
+        {'similarity': round(similarity_score*100, 2)}
     )
  
 if __name__ == '__main__':
