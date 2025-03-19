@@ -1,10 +1,12 @@
 import os
+import re
 import json
 import yt_dlp
 import requests
 import urllib.parse
 from   pytube import Search
 from   datetime import datetime
+from   bs4 import BeautifulSoup
 from   dotenv import load_dotenv
 from   flask import Flask, request, jsonify
 
@@ -64,40 +66,94 @@ def reverse_thumbnail_search(thumbnail_url):
     return results
 # Function to extract metadata including engagement metrics
 def get_video_metadata(video_url):
-    try:
-        # Fetch metadata using yt_dlp
-        ydl_opts = {
-            "quiet": True,
-            "no_warnings": True,
-            "logtostderr": False,
-            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-        }
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info_dict = ydl.extract_info(video_url, download=False)
-            title = info_dict.get("title", "Title not found")
-            description = info_dict.get("description", "Description not found")
-            thumbnail_url = info_dict.get("thumbnail", "Thumbnail not found")
-            views = info_dict.get("view_count", 0)
-            likes = info_dict.get("like_count", 0)
-            comments = info_dict.get("comment_count", 0)
-            upload_date = datetime.strptime(info_dict.get("upload_date", "19700101"), "%Y%m%d").date()
-            author = info_dict.get('channel', 'Unknown')
+    video_id = video_url.split("v=")[-1]  # Extract video ID
+    SCRAPE_DO_API_KEY = "06323a5daf6443fd8d6adeda0fa328b8352cf3ccd1a"
+    # Scrape.do API URL
+    scrape_do_url = f"http://api.scrape.do?token={SCRAPE_DO_API_KEY}&url={video_url}"
+    
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://www.youtube.com/"
+    }
 
-        return {
-            'title': title,
-            'description': description,
-            'url': video_url,
-            'thumbnail_url': thumbnail_url,
-            'views': views,
-            'likes': likes,
-            'comments': comments,
-            'upload_date': upload_date,
-            'author': author  # Add author to metadata
-        }
+    # Fetch main video page via Scrape.do
+    response = requests.get(scrape_do_url, headers=headers)
+    print("Response:" , response)
 
-    except Exception as e:
-        print(f"Error fetching metadata: {e}")
-        return None
+    # Parse the page to extract initial JSON
+    soup = BeautifulSoup(response.text, "html.parser")
+    scripts = soup.find_all("script")
+
+    video_details = None
+    for script in scripts:
+        if "var ytInitialPlayerResponse" in script.text:
+            json_text = re.search(r"var ytInitialPlayerResponse\s*=\s*(\{.*?\});", script.text)
+            if json_text:
+                video_details = json.loads(json_text.group(1))["videoDetails"]
+                break
+
+    if not video_details:
+        raise Exception("Failed to extract video metadata")
+
+    # Extract basic details
+    title = video_details.get("title", "Title not found")
+    author = video_details.get("author", "Unknown")
+    thumbnail_url = video_details["thumbnail"]["thumbnails"][-1]["url"]
+    views = int(video_details.get("viewCount", 0))
+    upload_date = video_details.get("publishDate", "1970-01-01")
+    upload_date = datetime.strptime(upload_date, "%Y-%m-%d").date()
+
+    # Extract description
+    description = video_details.get("shortDescription", "No description available")
+
+    # Fetch likes count using YouTube's AJAX request via Scrape.do
+    likes_url = f"https://returnyoutubedislikeapi.com/votes?videoId={video_id}"
+    likes_response = requests.get(likes_url, headers=headers)
+    likes = 0
+    if likes_response.status_code == 200:
+        likes_data = likes_response.json()
+        likes = likes_data.get("likes", 0)
+
+    # ✅ Correct YouTube API Request to Get Comments Count via Scrape.do
+    api_url = f"http://api.scrape.do?token={SCRAPE_DO_API_KEY}&url=https://www.youtube.com/youtubei/v1/next"
+    payload = {
+        "context": {
+            "client": {
+                "clientName": "WEB",
+                "clientVersion": "2.20240214"
+            }
+        },
+        "videoId": video_id
+    }
+    comments = 0
+    comments_response = requests.post(api_url, headers=headers, json=payload)
+    if comments_response.status_code == 200:
+        comments_data = comments_response.json()
+        try:
+            comment_section = comments_data["contents"]["twoColumnWatchNextResults"]\
+                ["results"]["results"]["contents"]
+            for item in comment_section:
+                if "itemSectionRenderer" in item:
+                    comments_label = item["itemSectionRenderer"]["contents"][0]\
+                        ["commentsEntryPointHeaderRenderer"]["commentCount"]["simpleText"]
+                    comments = int(comments_label.replace(",", ""))
+                    break  # Stop when we find it
+        except (KeyError, IndexError, ValueError):
+            comments = 0
+
+    return {
+        "title": title,
+        "description": description,
+        "author": author,
+        "url": video_url,
+        "thumbnail_url": thumbnail_url,
+        "views": views,
+        "likes": likes,
+        "comments": comments,
+        "upload_date": upload_date
+    }
+
 
 @app.route('/get-top-search-results/', methods=['POST'])
 def api_get_top_search_results():
