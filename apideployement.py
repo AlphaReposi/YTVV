@@ -203,7 +203,7 @@ def api_compute_similarity():
     text2 = f"{video2['title']} {video2['description']}"
     body = {'text_1': text1, 'text_2': text2}
     api_url = 'https://api.api-ninjas.com/v1/textsimilarity'
-    response = requests.post(api_url, headers={'X-Api-Key': 'iA1uG7UEmJtOuvU1MrS9Kw==bLdVLc81sdAwwpRd'}, json=data)
+    response = requests.post(api_url, headers={'X-Api-Key': 'iA1uG7UEmJtOuvU1MrS9Kw==bLdVLc81sdAwwpRd'}, json=body)
     similarity_score = response.json()['similarity']
     return jsonify(
         {'similarity': round(similarity_score*100, 2)}
