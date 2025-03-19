@@ -1,20 +1,21 @@
 import os
-import re
 import json
 import yt_dlp
 import requests
 import urllib.parse
 from   pytube import Search
 from   datetime import datetime
-from   bs4 import BeautifulSoup
 from   dotenv import load_dotenv
 from   flask import Flask, request, jsonify
+from   sentence_transformers import SentenceTransformer, util
 
 # Load environment variables from .env file
 load_dotenv()
 # Get the API key
 API_KEY = os.getenv("API_KEY")
 app = Flask(__name__)
+
+model = SentenceTransformer('all-MiniLM-L6-v2')
 
 # Function to generate similar titles
 def generate_similar_titles(title):
@@ -66,94 +67,46 @@ def reverse_thumbnail_search(thumbnail_url):
     return results
 # Function to extract metadata including engagement metrics
 def get_video_metadata(video_url):
-    video_id = video_url.split("v=")[-1]  # Extract video ID
-    SCRAPE_DO_API_KEY = "06323a5daf6443fd8d6adeda0fa328b8352cf3ccd1a"
-    # Scrape.do API URL
-    scrape_do_url = f"http://api.scrape.do?token={SCRAPE_DO_API_KEY}&url={video_url}"
+    try:
+        # Fetch metadata using yt_dlp
+        ydl_opts = {
+            "quiet": True,
+            "no_warnings": True,
+            "logtostderr": False
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info_dict = ydl.extract_info(video_url, download=False)
+            title = info_dict.get("title", "Title not found")
+            description = info_dict.get("description", "Description not found")
+            thumbnail_url = info_dict.get("thumbnail", "Thumbnail not found")
+            views = info_dict.get("view_count", 0)
+            likes = info_dict.get("like_count", 0)
+            comments = info_dict.get("comment_count", 0)
+            upload_date = datetime.strptime(info_dict.get("upload_date", "19700101"), "%Y%m%d").date()
+            author = info_dict.get('channel', 'Unknown')
+
+        return {
+            'title': title,
+            'description': description,
+            'url': video_url,
+            'thumbnail_url': thumbnail_url,
+            'views': views,
+            'likes': likes,
+            'comments': comments,
+            'upload_date': upload_date,
+            'author': author  # Add author to metadata
+        }
+
+    except Exception as e:
+        print(f"Error fetching metadata: {e}")
+        return None
     
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Referer": "https://www.youtube.com/"
-    }
-
-    # Fetch main video page via Scrape.do
-    response = requests.get(scrape_do_url, headers=headers)
-    print("Response:" , response)
-
-    # Parse the page to extract initial JSON
-    soup = BeautifulSoup(response.text, "html.parser")
-    scripts = soup.find_all("script")
-
-    video_details = None
-    for script in scripts:
-        if "var ytInitialPlayerResponse" in script.text:
-            json_text = re.search(r"var ytInitialPlayerResponse\s*=\s*(\{.*?\});", script.text)
-            if json_text:
-                video_details = json.loads(json_text.group(1))["videoDetails"]
-                break
-
-    if not video_details:
-        raise Exception("Failed to extract video metadata")
-
-    # Extract basic details
-    title = video_details.get("title", "Title not found")
-    author = video_details.get("author", "Unknown")
-    thumbnail_url = video_details["thumbnail"]["thumbnails"][-1]["url"]
-    views = int(video_details.get("viewCount", 0))
-    upload_date = video_details.get("publishDate", "1970-01-01")
-    upload_date = datetime.strptime(upload_date, "%Y-%m-%d").date()
-
-    # Extract description
-    description = video_details.get("shortDescription", "No description available")
-
-    # Fetch likes count using YouTube's AJAX request via Scrape.do
-    likes_url = f"https://returnyoutubedislikeapi.com/votes?videoId={video_id}"
-    likes_response = requests.get(likes_url, headers=headers)
-    likes = 0
-    if likes_response.status_code == 200:
-        likes_data = likes_response.json()
-        likes = likes_data.get("likes", 0)
-
-    # ✅ Correct YouTube API Request to Get Comments Count via Scrape.do
-    api_url = f"http://api.scrape.do?token={SCRAPE_DO_API_KEY}&url=https://www.youtube.com/youtubei/v1/next"
-    payload = {
-        "context": {
-            "client": {
-                "clientName": "WEB",
-                "clientVersion": "2.20240214"
-            }
-        },
-        "videoId": video_id
-    }
-    comments = 0
-    comments_response = requests.post(api_url, headers=headers, json=payload)
-    if comments_response.status_code == 200:
-        comments_data = comments_response.json()
-        try:
-            comment_section = comments_data["contents"]["twoColumnWatchNextResults"]\
-                ["results"]["results"]["contents"]
-            for item in comment_section:
-                if "itemSectionRenderer" in item:
-                    comments_label = item["itemSectionRenderer"]["contents"][0]\
-                        ["commentsEntryPointHeaderRenderer"]["commentCount"]["simpleText"]
-                    comments = int(comments_label.replace(",", ""))
-                    break  # Stop when we find it
-        except (KeyError, IndexError, ValueError):
-            comments = 0
-
-    return {
-        "title": title,
-        "description": description,
-        "author": author,
-        "url": video_url,
-        "thumbnail_url": thumbnail_url,
-        "views": views,
-        "likes": likes,
-        "comments": comments,
-        "upload_date": upload_date
-    }
-
+# Function to compute cosine similarity using Sentence-BERT
+def compute_similarity(text1, text2):
+    embedding1 = model.encode(text1, convert_to_tensor=True)
+    embedding2 = model.encode(text2, convert_to_tensor=True)
+    similarity_score = util.cos_sim(embedding1, embedding2).item()
+    return float(round(similarity_score*100, 2))
 
 @app.route('/get-top-search-results/', methods=['POST'])
 def api_get_top_search_results():
@@ -203,14 +156,10 @@ def api_compute_similarity():
     video2 = data['video2']
     text1 = f"{video1['title']} {video1['description']}"
     text2 = f"{video2['title']} {video2['description']}"
-    body = {'text_1': text1, 'text_2': text2}
-    api_url = 'https://api.api-ninjas.com/v1/textsimilarity'
-    response = requests.post(api_url, headers={'X-Api-Key': 'iA1uG7UEmJtOuvU1MrS9Kw==bLdVLc81sdAwwpRd'}, json=data)
-    similarity_score = response.json()['similarity']
+    similarity_score = compute_similarity(text1, text2)
     return jsonify(
-        {'similarity': round(similarity_score*100, 2)}
+        {'similarity': similarity_score}
     )
  
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 10000))  # Render provides PORT dynamically
-    app.run(host="0.0.0.0", port=port, debug=True)
+    app.run(debug=True)
