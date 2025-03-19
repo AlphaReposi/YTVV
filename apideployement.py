@@ -15,8 +15,6 @@ load_dotenv()
 API_KEY = os.getenv("API_KEY")
 app = Flask(__name__)
 
-model = SentenceTransformer('all-MiniLM-L6-v2')
-
 # Function to generate similar titles
 def generate_similar_titles(title):
     base_url = "https://rephrasesrv.gingersoftware.com/Rephrase/secured/rephrase"
@@ -67,12 +65,7 @@ def reverse_thumbnail_search(thumbnail_url):
     return results
 # Function to extract metadata including engagement metrics
 def extract_video_id(video_url_or_id):
-    """
-    Extracts the YouTube video ID from a URL or returns the ID directly if provided.
 
-    :param video_url_or_id: The YouTube video URL or ID.
-    :return: The extracted video ID or None if the input is invalid.
-    """
     # Regex pattern to match YouTube video IDs in various URL formats
     youtube_regex = (
         r'(?:https?://)?'  # Optional scheme (http or https)
@@ -94,12 +87,6 @@ def extract_video_id(video_url_or_id):
 
 def get_youtube_metadata(video):
     video_id = extract_video_id(video)
-    """
-    Fetches metadata for a YouTube video using the ytapi.apps.mattw.io API.
-
-    :param video_id: The ID of the YouTube video.
-    :return: A dictionary containing the simplified metadata of the video.
-    """
     # API endpoint
     api_url = "https://ytapi.apps.mattw.io/v3/videos"
     
@@ -165,13 +152,6 @@ def get_youtube_metadata(video):
     except requests.exceptions.RequestException as e:
         print(f"An error occurred while fetching metadata: {e}")
         return None
-    
-# Function to compute cosine similarity using Sentence-BERT
-def compute_similarity(text1, text2):
-    embedding1 = model.encode(text1, convert_to_tensor=True)
-    embedding2 = model.encode(text2, convert_to_tensor=True)
-    similarity_score = util.cos_sim(embedding1, embedding2).item()
-    return float(round(similarity_score*100, 2))
 
 @app.route('/get-top-search-results/', methods=['POST'])
 def api_get_top_search_results():
@@ -221,9 +201,12 @@ def api_compute_similarity():
     video2 = data['video2']
     text1 = f"{video1['title']} {video1['description']}"
     text2 = f"{video2['title']} {video2['description']}"
-    similarity_score = compute_similarity(text1, text2)
+    body = {'text_1': text1, 'text_2': text2}
+    api_url = 'https://api.api-ninjas.com/v1/textsimilarity'
+    response = requests.post(api_url, headers={'X-Api-Key': 'iA1uG7UEmJtOuvU1MrS9Kw==bLdVLc81sdAwwpRd'}, json=data)
+    similarity_score = response.json()['similarity']
     return jsonify(
-        {'similarity': similarity_score}
+        {'similarity': round(similarity_score*100, 2)}
     )
  
 if __name__ == '__main__':
