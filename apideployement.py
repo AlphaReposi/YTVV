@@ -85,7 +85,7 @@ def extract_video_id(video_url_or_id):
         return None
 
 
-def get_youtube_metadata(video):
+def get_video_metadata(video):
     video_id = extract_video_id(video)
     # API endpoint
     api_url = "https://ytapi.apps.mattw.io/v3/videos"
