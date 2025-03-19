@@ -3,4 +3,3 @@ requests
 python-dotenv
 yt-dlp
 pytube
-sentence-transformers
