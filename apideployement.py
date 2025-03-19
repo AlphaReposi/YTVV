@@ -8,7 +8,6 @@ from   pytube import Search
 from   datetime import datetime
 from   dotenv import load_dotenv
 from   flask import Flask, request, jsonify
-from   sentence_transformers import SentenceTransformer, util
 
 # Load environment variables from .env file
 load_dotenv()
