@@ -69,7 +69,8 @@ def get_video_metadata(video_url):
         ydl_opts = {
             "quiet": True,
             "no_warnings": True,
-            "logtostderr": False
+            "logtostderr": False,
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
         }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info_dict = ydl.extract_info(video_url, download=False)
