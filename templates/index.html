@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Metadata Test</title>
+    <style>
+        /* General Reset */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center; /* Center horizontally */
+            align-items: center; /* Center vertically */
+            height: 100vh; /* Full viewport height */
+            background-color: #f4f4f9;
+        }
+
+        /* Container for all content */
+        .container {
+            text-align: center; /* Center text inside the container */
+            max-width: 600px;
+            width: 100%;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            background-color: #fff;
+        }
+
+        /* Form Styling */
+        .form-container input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        .form-container button {
+            padding: 10px 20px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .form-container button:hover {
+            background-color: #0056b3;
+        }
+
+        /* Data Card Styling */
+        .data-card img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+        }
+
+        .data-card h1 {
+            font-size: 1.5em;
+            margin-bottom: 10px;
+        }
+
+        .data-card p {
+            margin: 5px 0;
+        }
+
+        .data-card a {
+            color: #007BFF;
+            text-decoration: none;
+        }
+
+        .data-card a:hover {
+            text-decoration: underline;
+        }
+
+        .stats {
+            display: flex;
+            gap: 20px;
+            margin-top: 15px;
+            font-size: 0.9em;
+            color: #555;
+        }
+
+        .stats div {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Main Container -->
+    <div class="container">
+        <h1>Hi Jevon!, Here is an example</h1>
+
+        <!-- Form for user input -->
+        <div class="form-container">
+            <form method="POST">
+                <label for="text_input">Enter a video URL:</label><br>
+                <input type="text" id="text_input" name="text_input" value="{{ user_input }}" placeholder="Type something...">
+                <button type="submit">Process Input</button>
+            </form>
+        </div>
+
+        <!-- Define the format_number macro -->
+        {% macro format_number(num) %}
+            {% if num|int >= 1000 %}
+                {{ "%.1fK"|format(num|float / 1000) }}
+            {% else %}
+                {{ num|int }}
+            {% endif %}
+        {% endmacro %}
+
+        <!-- Display the structured data if available -->
+        {% if data %}
+        <div class="data-card">
+            <img src="{{ data.thumbnail_url }}" alt="Thumbnail">
+            <h1>{{ data.title }}</h1>
+            <p><strong>Description:</strong> {{ data.description }}</p>
+            <p><strong>Author:</strong> {{ data.author }}</p>
+            <p><strong>Uploaded On:</strong> {{ data.upload_date }}</p>
+            <p><strong>URL:</strong> <a href="{{ data.url }}" target="_blank">{{ data.url }}</a></p>
+            <div class="stats">
+                <div><span>👀</span> {{ format_number(data.views) }} views</div>
+                <div><span>👍</span> {{ format_number(data.likes) }} likes</div>
+                <div><span>💬</span> {{ format_number(data.comments) }} comments</div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>
