@@ -7,13 +7,27 @@ import urllib.parse
 from   pytube import Search
 from   datetime import datetime
 from   dotenv import load_dotenv
-from   flask import Flask, request, jsonify
+from flask import Flask, render_template, request, jsonify
 
 # Load environment variables from .env file
 load_dotenv()
 # Get the API key
 API_KEY = os.getenv("API_KEY")
 app = Flask(__name__)
+
+@app.route('/', methods=['GET', 'POST'])
+def index():
+    # Variable to store the user input
+    user_input = None
+    data = None
+    # Check if the form was submitted via POST
+    if request.method == 'POST':
+        user_input = request.form.get('text_input', '').strip()  # Get the input from the form
+        data = get_video_metadata(user_input.strip())
+
+    # Render the template with the user_input passed as context
+    return render_template('index.html', user_input=user_input, data=data)
+
 
 # Function to generate similar titles
 def generate_similar_titles(title):
