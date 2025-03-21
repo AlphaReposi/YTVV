@@ -18,7 +18,7 @@ app = Flask(__name__)
 @app.route('/', methods=['GET', 'POST'])
 def index():
     # Variable to store the user input
-    user_input = None
+    user_input = ''
     data = None
     # Check if the form was submitted via POST
     if request.method == 'POST':
